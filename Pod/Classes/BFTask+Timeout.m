@@ -18,13 +18,22 @@ NSInteger const kBFTimeoutError = 80175555;
 
 @end
 
+@interface BFTaskCompletionSource (Timeout)
+
+@property (nonatomic) BFTaskCompletionSource *timeoutTaskCompletion;
+@property NSTimeInterval timeout;
+
+@end
 
 @implementation BFTaskCompletionSource (Timeout)
 
 + (instancetype)taskCompletionSourceWithExpiration:(NSTimeInterval)timeout {
     BFTaskCompletionSource *taskCompletion = [self taskCompletionSource];
-    [[BFTask taskWithDelay:timeout * 1000] continueWithBlock: ^id (BFTask *task) {
-        [taskCompletion trySetTimedOut];
+    taskCompletion.timeout = timeout;
+    taskCompletion.timeoutTaskCompletion = [BFTaskCompletionSource taskCompletionSource];
+    [[taskCompletion.timeoutTaskCompletion.task setTimeout:timeout * 1000] continueWithBlock:^id _Nullable(BFTask * _Nonnull t) {
+        if (!t.isCancelled)
+            [taskCompletion trySetTimedOut];
         return nil;
     }];
     return taskCompletion;
@@ -36,6 +45,20 @@ NSInteger const kBFTimeoutError = 80175555;
 
 -(void)trySetTimedOut {
     [self trySetError:[NSError boltsTimeoutError]];
+}
+
+- (void)resetTimeout {
+    // Do nothing if completed
+    if (self.task.completed) return;
+    // Cancel previous task
+    [self.timeoutTaskCompletion trySetCancelled];
+    // Start new one
+    self.timeoutTaskCompletion = [BFTaskCompletionSource taskCompletionSource];
+    [[self.timeoutTaskCompletion.task setTimeout:self.timeout * 1000] continueWithBlock:^id _Nullable(BFTask * _Nonnull t) {
+        if (!t.isCancelled)
+            [self trySetTimedOut];
+        return nil;
+    }];
 }
 
 @end
