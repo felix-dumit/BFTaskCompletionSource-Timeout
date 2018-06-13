@@ -36,6 +36,11 @@ extern NSInteger const kBFTimeoutError;
  */
 - (void)trySetTimedOut;
 
+/**
+ Resets the timeour
+ */
+- (void)resetTimeout;
+
 @end
 
 
